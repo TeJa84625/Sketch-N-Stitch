@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Skecth N Book</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
+    <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+
+    <meta http-equiv="Cross-Origin-Opener-Policy" content="unsafe-none" />
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        #mobileNotice {
+            display: none;
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #f87171;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 5px;
+            z-index: 9999;
+            font-size: 14px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+        }
+
+        #auth-modal,
+        #google-setup-modal {
+            display: none;
+            position: fixed;
+            z-index: 10000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.4);
+            justify-content: center;
+            align-items: center;
+        }
+    </style>
+</head>
+
+<body class="bg-white text-gray-800">
+
+    <header class="bg-white border-b shadow-sm sticky top-0 z-50">
+        <div class="container mx-auto px-4 py-4 flex justify-between items-center">
+            <a href="#" class="text-2xl font-bold text-blue-600">Skecth<span class="text-gray-900">N</span>Book</a>
+            <nav>
+                <ul class="hidden md:flex gap-6 text-sm font-semibold">
+                    <li><a href="#how-it-works" class="hover:text-blue-600">How It Works</a></li>
+                    <li><a href="#features" class="hover:text-blue-600">Features</a></li>
+                    <li><a href="#pricing" class="hover:text-blue-600">Pricing</a></li>
+                    <li><a href="#contact" class="hover:text-blue-600">Contact</a></li>
+                </ul>
+            </nav>
+            <div class="flex items-center gap-4">
+                <a id="start-design-btn" href="./v4_1.html"
+                    class="ml-4 bg-gray-400 text-white px-4 py-2 rounded text-sm cursor-not-allowed opacity-50">
+                    Start Your Design
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <div id="mobileNotice" class="hidden">
+        This design tool is only available on desktop devices with a large screen.
+    </div>
+
+    <section class="py-16 bg-gray-50">
+        <div class="container mx-auto px-4 flex flex-col lg:flex-row items-center justify-between gap-12">
+            <div class="flex-1">
+                <h1 class="text-4xl font-bold mb-4">Bring Your Bulk T-Shirt Order to Life in 3D</h1>
+                <p class="text-lg text-gray-600 mb-6">
+                    Design, visualize, and order high-quality custom t-shirts for your team, event, or brand with our
+                    interactive 3D mockup tool.
+                </p>
+                <div class="flex gap-4">
+                    <a id="hero-start-design-btn" href="./v4_1.html"
+                        class="bg-gray-400 text-white px-5 py-3 rounded text-sm cursor-not-allowed opacity-50">
+                        Start Your Design
+                    </a>
+                    <a href="#contact" class="bg-gray-200 text-gray-800 px-5 py-3 rounded hover:bg-gray-300">
+                        Get a Quote
+                    </a>
+                </div>
+            </div>
+            <div class="flex-1 w-full max-w-[600px] h-[600px]">
+                <model-viewer id="viewer" src="https://teja84625.github.io/3d-models/oversized_t-shirt.glb"
+                    camera-controls auto-rotate ar shadow-intensity="0" class="w-full h-full" alt="3D T-shirt mockup">
+                </model-viewer>
+                <script type="module">
+                    const viewer = document.querySelector('#viewer');
+                    viewer.addEventListener('load', () => {
+                        const model = viewer.model;
+                        if (!model) return;
+                        model.materials.forEach((material) => {
+                            material.pbrMetallicRoughness.setBaseColorFactor([1, 1, 1, 1]);
+                        });
+                    });
+                </script>
+            </div>
+        </div>
+    </section>
+
+    <section id="how-it-works" class="py-16 bg-white">
+        <div class="container mx-auto px-4">
+            <h2 class="text-3xl font-bold mb-10 text-center">From Concept to Creation in 3 Simple Steps</h2>
+            <div class="grid md:grid-cols-3 gap-10">
+                <div class="text-center">
+                    <div
+                        class="w-12 h-12 mx-auto bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xl font-bold mb-4">
+                        1
+                    </div>
+                    <h3 class="font-semibold text-lg mb-2">Design & Upload</h3>
+                    <p class="text-gray-600">Choose your t-shirt style and colors, then upload your logo or artwork in
+                        seconds.</p>
+                </div>
+                <div class="text-center">
+                    <div
+                        class="w-12 h-12 mx-auto bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xl font-bold mb-4">
+                        2
+                    </div>
+                    <h3 class="font-semibold text-lg mb-2">Visualize in 3D</h3>
+                    <p class="text-gray-600">See your design come to life on our interactive 3D model. Rotate, zoom, and
+                        approve your mockup instantly.</p>
+                </div>
+                <div class="text-center">
+                    <div
+                        class="w-12 h-12 mx-auto bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xl font-bold mb-4">
+                        3
+                    </div>
+                    <h3 class="font-semibold text-lg mb-2">Place Your Bulk Order</h3>
+                    <p class="text-gray-600">Select your quantities, get an instant quote, and place your order. We'll
+                        handle the rest.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer class="bg-gray-100 py-6 text-center text-sm text-gray-600">
+        &copy; 2025 Skecth N Book. All Rights Reserved.
+    </footer>
+
+</body>
+
+    <script type="module">
+        function isBlockedDevice() {
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            const isSmallScreen = window.innerWidth < 1024;
+            return isMobile || isSmallScreen;
+        }
+
+        function showMobileNotice() {
+            const notice = document.getElementById('mobileNotice');
+            notice.style.display = 'block';
+            setTimeout(() => {
+                notice.style.display = 'none';
+            }, 4000);
+        }
+
+        const startDesignBtn = document.getElementById('start-design-btn');
+        const heroStartDesignBtn = document.getElementById('hero-start-design-btn');
+        const designButtons = [startDesignBtn, heroStartDesignBtn];
+
+        // Enable design buttons (remove disabled styles and behaviors)
+        designButtons.forEach(button => {
+            button.classList.remove('bg-gray-400', 'cursor-not-allowed', 'opacity-50');
+            button.classList.add('bg-blue-600', 'hover:bg-blue-700');
+            button.style.pointerEvents = 'auto';
+            button.setAttribute('href', './v4_1.html');
+
+            button.addEventListener('click', function (e) {
+                if (isBlockedDevice()) {
+                    e.preventDefault();
+                    showMobileNotice();
+                }
+            });
+        });
+
+        // If you had other UI elements like auth buttons or modals, you can remove or hide them since Firebase is removed
+        // For example:
+        const authBtn = document.getElementById('auth-btn');
+        if (authBtn) {
+            authBtn.textContent = 'My Account';
+            authBtn.onclick = () => {
+                // You can redirect or show something else or just disable it
+                alert('Authentication removed.');
+            };
+        }
+
+        // Remove or hide auth modal elements if present
+        const authModal = document.getElementById('auth-modal');
+        if (authModal) authModal.style.display = 'none';
+
+        const googleSetupModal = document.getElementById('google-setup-modal');
+        if (googleSetupModal) googleSetupModal.style.display = 'none';
+
+    </script>
+
+
+</body>
+
+</html>

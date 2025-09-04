@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Skecth N Book Editor</title>
+    <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="v4_styles.css">
+</head>
+
+<body class="bg-gray-50">
+
+    <div class="container">
+        <div class="controls bg-white shadow-lg rounded-xl p-6 flex flex-col gap-6">
+            
+            <button onclick="history.back()"
+                class="bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 focus:outline-none flex items-center space-x-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                </svg>
+                <span>Back</span>
+            </button>
+
+                    <label class="text-sm">Select Shirt:</label>
+                    <select id="modelSelect" class="p-2 rounded-lg border border-gray-300">
+                        <option value="./models/coller_tshirt.glb" data-texture="./images/coller_tshirt.png" price="300"
+                            help-image="./images/collar_tshirt_demo.png" selected>Collar T-shirt</option>
+                        <option value="./models/tshirt.glb" data-texture="./images/tshirt.png" price="150"
+                            help-image="./images/tshirt_demo.png">
+                            T‑shirt</option>
+                    </select>
+
+                    <button onclick="openEditor()"
+                        class="bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 focus:outline-none">Edit
+                        Cloth
+                        Design</button>
+
+                    <label class="text-sm">Background Color:</label>
+                    <input type="color" id="bgColorPicker" value="#ffffff"
+                        class="p-2 rounded-lg border border-gray-300 mb-4" />
+
+                    <label class="text-sm">Cloth Color:</label>
+                    <div class="color-palette flex gap-2 flex-wrap">
+                        <input type="radio" id="color1" name="color" value="#ffffff" checked />
+                        <label for="color1" class="rounded-full" style="background-color: #ffffff;"></label>
+
+                        <input type="radio" id="color2" name="color" value="#fbbf24" />
+                        <label for="color2" class="rounded-full" style="background-color: #fbbf24;"></label>
+
+                        <input type="radio" id="color3" name="color" value="#4ade80" />
+                        <label for="color3" class="rounded-full" style="background-color: #4ade80;"></label>
+
+                        <input type="radio" id="color4" name="color" value="#ef4444" />
+                        <label for="color4" class="rounded-full" style="background-color: #ef4444;"></label>
+
+                        <input type="radio" id="color5" name="color" value="#3b82f6" />
+                        <label for="color5" class="rounded-full" style="background-color: #3b82f6;"></label>
+
+                        <input type="radio" id="color6" name="color" value="#9333ea" />
+                        <label for="color6" class="rounded-full" style="background-color: #9333ea;"></label>
+                    </div>
+
+                    <button onclick="openConfirmOrder()"
+                        class="bg-green-500 text-white py-2 px-4 rounded-lg hover:bg-green-600 focus:outline-none">
+                        Place Order
+                    </button>
+
+        </div>
+        <model-viewer id="viewer" src="./models/coller_tshirt.glb" camera-controls ar shadow-intensity="0"
+            class="flex-1 rounded-xl"></model-viewer>
+        
+        <div id="confirmOrderContainer"
+            class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div class="bg-white p-6 rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-lg">
+                <h2 class="text-2xl font-bold mb-6 text-center">Place a Order</h2>
+        
+                <div class="flex flex-col md:flex-row gap-6">
+                    <!-- Left Panel -->
+                    <div class="md:w-1/2 border-r pr-4">
+                        <div class="mb-4 text-center">
+                            <p class="font-semibold text-lg" id="shirtName">Shirt Name</p>
+                            <p>Price: ₹<span id="shirtPrice">0</span></p>
+                        </div>
+        
+                        <label class="text-sm block mb-1">Select Size:</label>
+                        <select id="shirtSize" class="p-2 rounded-lg border border-gray-300 w-full mb-4">
+                            <option value="XS">XS</option>
+                            <option value="S">S</option>
+                            <option value="M">M</option>
+                            <option value="L">L</option>
+                            <option value="XL">XL</option>
+                            <option value="XXL">XXL</option>
+                        </select>
+        
+                        <label class="text-sm block mb-1">Quantity:</label>
+                        <input type="number" id="shirtQuantity" class="p-2 rounded-lg border border-gray-300 w-full mb-4"
+                            min="1" value="1" />
+        
+                        <!-- Action Buttons -->
+                        <div class="flex gap-2">
+                            <button id="actionButton" onclick="addOrUpdateShirt()"
+                                class="bg-green-500 text-white py-2 px-4 rounded hover:bg-green-600 w-full">
+                                Add to Cart
+                            </button>
+                            <button id="cancelEditBtn" onclick="cancelEdit()" style="display: none;"
+                                class="bg-gray-400 text-white py-2 px-4 rounded hover:bg-gray-500">
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+        
+                    <!-- Right Panel -->
+                    <div class="md:w-1/2 pl-4">
+                        <h3 class="text-lg font-semibold mb-2">Your Cart:</h3>
+                        <ul id="summaryList" class="list-none mb-4 h-60 overflow-y-auto pr-2 text-sm border-b pb-2 space-y-2">
+                        </ul>
+        
+                        <div class="mb-2 text-sm">
+                            <p id="totalQuantity">Total Quantity: 0</p>
+                            <p>Total Price: ₹<span id="totalPrice">0</span></p>
+                        </div>
+        
+                        <div class="flex justify-end mt-4">
+                            <button onclick="closeConfirmOrder()"
+                                class="bg-red-500 text-white py-2 px-4 rounded hover:bg-red-600 mr-2">Cancel</button>
+                            <button onclick="clearCart()"
+                                class="bg-red-500 text-white py-2 px-4 rounded hover:bg-red-600 mr-2">Clear Cart</button>
+                            <button onclick="confirmFinalOrder()"
+                                class="bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700">Confirm Order</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            let selectedShirts = [];
+            let editingIndex = null;
+
+            function openConfirmOrder() {
+                selectedShirts = [];
+                editingIndex = null;
+                updateSummary();
+
+                document.getElementById('shirtQuantity').value = 1;
+                document.getElementById('actionButton').textContent = 'Add to Cart';
+                document.getElementById('cancelEditBtn').style.display = 'none';
+
+                const modelSelect = document.getElementById('modelSelect');
+                const selectedOption = modelSelect.options[modelSelect.selectedIndex];
+
+                const shirtName = selectedOption.text;
+                const shirtPrice = selectedOption.getAttribute('price');
+
+                document.getElementById('shirtName').textContent = shirtName;
+                document.getElementById('shirtPrice').textContent = shirtPrice;
+
+                window.currentShirt = {
+                    name: shirtName,
+                    price: Number(shirtPrice),
+                };
+
+                document.getElementById('confirmOrderContainer').classList.remove('hidden');
+            }
+
+            function closeConfirmOrder() {
+                document.getElementById('confirmOrderContainer').classList.add('hidden');
+                cancelEdit();
+            }
+
+            function addOrUpdateShirt() {
+                const size = document.getElementById('shirtSize').value;
+                const quantity = parseInt(document.getElementById('shirtQuantity').value);
+
+                if (quantity < 1) {
+                    alert("Please enter a valid quantity.");
+                    return;
+                }
+
+                const newItem = {
+                    type: window.currentShirt.name,
+                    size,
+                    quantity,
+                    price: window.currentShirt.price
+                };
+
+                if (editingIndex !== null) {
+                    selectedShirts[editingIndex] = newItem;
+                    cancelEdit();
+                } else {
+                    const duplicateIndex = selectedShirts.findIndex(
+                        item => item.type === newItem.type && item.size === newItem.size
+                    );
+
+                    if (duplicateIndex !== -1) {
+                        alert("This shirt and size combination already exists. Please edit it instead.");
+                        return;
+                    }
+
+                    selectedShirts.push(newItem);
+                }
+
+                updateSummary();
+                document.getElementById('shirtQuantity').value = 1;
+            }
+
+            function editItem(index) {
+                const item = selectedShirts[index];
+                editingIndex = index;
+
+                document.getElementById('shirtSize').value = item.size;
+                document.getElementById('shirtQuantity').value = item.quantity;
+                document.getElementById('actionButton').textContent = 'Update';
+                document.getElementById('cancelEditBtn').style.display = 'inline-block';
+            }
+
+            function cancelEdit() {
+                editingIndex = null;
+                document.getElementById('shirtQuantity').value = 1;
+                document.getElementById('actionButton').textContent = 'Add to Cart';
+                document.getElementById('cancelEditBtn').style.display = 'none';
+            }
+
+            function removeItemFromCart(index) {
+                selectedShirts.splice(index, 1);
+                updateSummary();
+                cancelEdit();
+            }
+
+            function updateSummary() {
+                const summaryList = document.getElementById('summaryList');
+                summaryList.innerHTML = '';
+
+                let totalQty = 0;
+                let totalPrice = 0;
+
+                selectedShirts.forEach(({ type, size, quantity, price }, index) => {
+                    const li = document.createElement('li');
+                    li.className = 'flex justify-between items-center';
+
+                    const itemText = document.createElement('span');
+                    itemText.textContent = `${type} - Size ${size} × ${quantity} = ₹${quantity * price}`;
+
+                    const btnGroup = document.createElement('span');
+
+                    const editBtn = document.createElement('button');
+                    editBtn.textContent = 'Edit';
+                    editBtn.className = 'text-blue-600 hover:underline ml-2';
+                    editBtn.onclick = () => editItem(index);
+
+                    const removeBtn = document.createElement('button');
+                    removeBtn.textContent = 'Remove';
+                    removeBtn.className = 'text-red-600 hover:underline ml-2';
+                    removeBtn.onclick = () => removeItemFromCart(index);
+
+                    btnGroup.appendChild(editBtn);
+                    btnGroup.appendChild(removeBtn);
+
+                    li.appendChild(itemText);
+                    li.appendChild(btnGroup);
+
+                    summaryList.appendChild(li);
+
+                    totalQty += quantity;
+                    totalPrice += quantity * price;
+                });
+
+                document.getElementById('totalQuantity').textContent = `Total Quantity: ${totalQty}`;
+                document.getElementById('totalPrice').textContent = totalPrice;
+            }
+
+            function clearCart() {
+                if (selectedShirts.length === 0) {
+                    alert("Cart is already empty.");
+                    return;
+                }
+                if (confirm("Are you sure you want to clear the cart?")) {
+                    selectedShirts = [];
+                    updateSummary();
+                    cancelEdit();
+                }
+            }
+
+            function confirmFinalOrder() {
+                if (selectedShirts.length === 0) {
+                    alert("Your cart is empty!");
+                    return;
+                }
+                console.log("Confirmed Order:", selectedShirts);
+                alert("Order Confirmed!");
+                closeConfirmOrder();
+            }
+        </script>
+
+    </div>
+
+    <div class="modal" id="textureModal">
+        <div class="modal-content bg-white p-5 rounded-xl">
+            <canvas id="textureCanvas" width="512" height="512" class="w-auto h-auto rounded-lg border"></canvas>
+            <input type="file" id="imageInput" multiple accept="image/*" class="p-1 rounded-lg border" />
+
+            <div class="text-controls mt-4 flex gap-4 justify-center">
+                <input type="text" id="textInput" placeholder="Add text" class="p-1 rounded-lg border" />
+                <select id="fontSelect" class="p-1 rounded-lg border">
+                    <option value="Arial" selected>Arial</option>
+                    <option value="Verdana">Verdana</option>
+                    <option value="Times New Roman">Times New Roman</option>
+                    <option value="Courier New">Courier New</option>
+                    <option value="Georgia">Georgia</option>
+                    <option value="Comic Sans MS">Comic Sans MS</option>
+                </select>
+                <input type="number" id="fontSizeInput" min="1" max="100" value="24"
+                    class="w-20 p-1 rounded-lg border" />
+                <input type="color" id="textColorPicker" value="#000000" class="p-2 rounded-lg border" />
+                <button onclick="addText()"
+                    class="bg-blue-500 text-white py-1 px-4 rounded-lg hover:bg-blue-600 focus:outline-none">Add
+                    Text</button>
+            </div>
+
+            <div class="text-controls mt-4 flex gap-4 justify-center">
+                <label><input type="checkbox" id="drawModeToggle" class="p-1" /> Draw Mode</label>
+                <input type="color" id="penColorPicker" value="#ff0000" class="p-1 rounded-lg border" />
+                <label>Pen Size: <input type="range" id="penSizeSlider" min="1" max="20" value="1"
+                        class="w-24" /></label>
+                <button onclick="clearDrawing()"
+                    class="bg-red-500 text-white py-1 px-4 rounded-lg hover:bg-red-600 focus:outline-none">Clear
+                    Drawing</button>
+            </div>
+
+            <div class="modal-buttons flex gap-4 justify-between mt-6">
+                <button onclick="closeEditor()"
+                    class="bg-red-500 text-white py-1 px-4 rounded-lg hover:bg-red-600 focus:outline-none">Close</button>
+                <button id="resetButton"
+                    class="bg-gray-500 text-white py-1 px-4 rounded-lg hover:bg-gray-600 focus:outline-none">Reset
+                    Design</button>
+                <button onclick=""
+                    class="bg-blue-500 text-white py-1 px-4 rounded-lg hover:bg-blue-600 focus:outline-none">Help</button>
+                <button onclick="applyTexture()"
+                    class="bg-green-500 text-white py-1 px-4 rounded-lg hover:bg-green-600 focus:outline-none">Apply to
+                    Model</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('bgColorPicker').addEventListener('input', function (event) {
+            var viewer = document.getElementById('viewer');
+            viewer.style.backgroundColor = event.target.value;
+        });
+    </script>
+
+    <script src="v4_script.js"></script>
+</body>
+
+</html>

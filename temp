@@ -1,0 +1,799 @@
+const viewer = document.getElementById("viewer");
+const canvas = document.getElementById("textureCanvas");
+const ctx = canvas.getContext("2d");
+const imageInput = document.getElementById("imageInput");
+const textInput = document.getElementById("textInput");
+const modal = document.getElementById("textureModal");
+const textColorPicker = document.getElementById("textColorPicker");
+const fontSelect = document.getElementById("fontSelect");
+const fontSizeInput = document.getElementById("fontSizeInput");
+const modelSelect = document.getElementById("modelSelect");
+const drawModeToggle = document.getElementById("drawModeToggle");
+const penColorPicker = document.getElementById("penColorPicker");
+const penSizeSlider = document.getElementById("penSizeSlider");
+const saveDesignBtn = document.getElementById("saveDesignBtn");
+const saveDesignModal = document.getElementById("saveDesignModal");
+const designNameInput = document.getElementById("designNameInput");
+const confirmSaveBtn = document.getElementById("confirmSaveBtn");
+const cancelSaveBtn = document.getElementById("cancelSaveBtn");
+const saveDesignError = document.getElementById("saveDesignError");
+const bgColorPicker = document.getElementById('bgColorPicker');
+
+let selectedShirts = [];
+let editingIndex = null;
+const images = [], textItems = [], drawingPaths = [];
+let baseImage = new Image();
+let selectedImageIndex = null;
+let selectedTextIndex = null;
+let draggingItem = false, draggingText = false, resizingCorner = null;
+let offsetX = 0, offsetY = 0;
+let isDrawing = false, lastX = 0, lastY = 0;
+let penSize = parseInt(penSizeSlider.value);
+const cornerSize = 10;
+let savedDesignId = null; // To store the ID of the saved design
+
+document.getElementById("bgColorPicker").addEventListener('input', function (event) {
+    var viewer = document.getElementById('viewer');
+    viewer.style.backgroundColor = event.target.value;
+    exitDrawingMode();
+});
+
+document.getElementById("resetButton").addEventListener("click", () => {
+    resetToBaseTexture();
+    exitDrawingMode();
+});
+
+function clearDrawing() {
+    drawingPaths.length = 0;
+    renderCanvas();
+    exitDrawingMode();
+}
+window.clearDrawing = clearDrawing;
+
+function resetToBaseTexture() {
+    images.length = 0;
+    textItems.length = 0;
+    drawingPaths.length = 0;
+    isDrawing = false;
+    const opt = modelSelect.selectedOptions[0];
+    baseImage.src = opt.getAttribute("data-texture");
+    baseImage.onload = () => {
+        renderCanvas();
+    };
+    savedDesignId = null; // Clear saved design ID
+    // Reset model color to white if you want
+    changeModelColor('#ffffff'); 
+}
+
+penSizeSlider.addEventListener("input", () => {
+    penSize = parseInt(penSizeSlider.value);
+});
+
+modelSelect.addEventListener("change", () => {
+    isDrawing = false;
+    const opt = modelSelect.selectedOptions[0];
+    viewer.src = opt.value;
+    baseImage.src = opt.getAttribute("data-texture");
+    baseImage.onload = () => {
+        renderCanvas();
+    };
+    // Also reset model color to white when changing model
+    changeModelColor('#ffffff');
+});
+
+function openEditor() {
+    if (!window.user) {
+        alert("Please log in to edit a design.");
+        return;
+    }
+    const opt = modelSelect.selectedOptions[0];
+    imageInput.value = "";
+    isDrawing = false;
+    baseImage.onload = () => {
+        modal.classList.add("active");
+        renderCanvas();
+    };
+    baseImage.src = opt.getAttribute("data-texture");
+}
+window.openEditor = openEditor;
+
+function closeEditor() {
+    isDrawing = false;
+    modal.classList.remove("active");
+    selectedImageIndex = null;
+    selectedTextIndex = null;
+    exitDrawingMode();
+}
+window.closeEditor = closeEditor;
+
+imageInput.addEventListener("change", () => {
+    isDrawing = false;
+    for (const file of imageInput.files) {
+        const img = new Image();
+        img.onload = () => {
+            images.push({
+                img,
+                x: 50, y: 50,
+                width: img.width, height: img.height
+            });
+            renderCanvas();
+        };
+        img.src = URL.createObjectURL(file);
+    }
+    exitDrawingMode();
+});
+
+function addText() {
+    isDrawing = false;
+    const txt = textInput.value.trim();
+    if (!txt) return;
+    const fz = parseInt(fontSizeInput.value) || 24;
+    textItems.push({
+        text: txt, x: 50, y: 50,
+        font: `${fz}px ${fontSelect.value}`,
+        color: textColorPicker.value
+    });
+    textInput.value = "";
+    renderCanvas();
+    exitDrawingMode();
+}
+window.addText = addText;
+
+// Function to apply a color tint to an image
+function applyColorToImage(image, color, callback) {
+    if (!image || !image.complete) {
+        callback(null);
+        return;
+    }
+
+    const offscreenCanvas = document.createElement('canvas');
+    offscreenCanvas.width = image.width;
+    offscreenCanvas.height = image.height;
+    const offscreenCtx = offscreenCanvas.getContext('2d');
+
+    // Draw the original image
+    offscreenCtx.drawImage(image, 0, 0, offscreenCanvas.width, offscreenCanvas.height);
+
+    // Apply tint if color is not white or transparent
+    if (color && color !== '#ffffff' && color !== 'rgba(0, 0, 0, 0)') { 
+        offscreenCtx.globalCompositeOperation = 'multiply'; // Multiply blends the colors
+        offscreenCtx.fillStyle = color;
+        offscreenCtx.fillRect(0, 0, offscreenCanvas.width, offscreenCanvas.height);
+        
+        // Use destination-in to keep only the shape of the original image with the new color
+        offscreenCtx.globalCompositeOperation = 'destination-in';
+        offscreenCtx.drawImage(image, 0, 0, offscreenCanvas.width, offscreenCanvas.height);
+    }
+
+    const tintedImage = new Image();
+    tintedImage.onload = () => callback(tintedImage);
+    tintedImage.onerror = () => callback(null); // Handle error
+    tintedImage.src = offscreenCanvas.toDataURL();
+}
+
+
+function renderCanvas() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    if (baseImage.complete) {
+        const modelColor = getModelColor(); 
+        
+        applyColorToImage(baseImage, modelColor, (tintedBaseImage) => {
+            if (tintedBaseImage) {
+                ctx.save();
+                ctx.translate(0, canvas.height);
+                ctx.scale(1, -1);
+                ctx.drawImage(tintedBaseImage, 0, 0, canvas.width, canvas.height);
+                ctx.restore();
+            } else {
+                // Fallback if tinting failed, draw original if available
+                ctx.save();
+                ctx.translate(0, canvas.height);
+                ctx.scale(1, -1);
+                ctx.drawImage(baseImage, 0, 0, canvas.width, canvas.height);
+                ctx.restore();
+            }
+
+            // Drawing other elements after the base image (tinted or original)
+            images.forEach((it, idx) => {
+                ctx.drawImage(it.img, it.x, it.y, it.width, it.height);
+                if (idx === selectedImageIndex) {
+                    ctx.strokeStyle = 'blue';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(it.x, it.y, it.width, it.height);
+                    drawHandles(it);
+                }
+            });
+            textItems.forEach((txt, idx) => {
+                ctx.font = txt.font; ctx.fillStyle = txt.color;
+                ctx.fillText(txt.text, txt.x, txt.y);
+                if (idx === selectedTextIndex) {
+                    const width = ctx.measureText(txt.text).width;
+                    const height = parseInt(txt.font);
+                    ctx.strokeStyle = 'blue';
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(txt.x, txt.y - height, width, height);
+                }
+            });
+            drawingPaths.forEach(path => {
+                ctx.strokeStyle = path.color;
+                ctx.lineWidth = path.size;
+                ctx.lineCap = "round";
+                ctx.beginPath();
+                path.points.forEach((pt, i) => i === 0 ? ctx.moveTo(pt.x, pt.y) : ctx.lineTo(pt.x, pt.y));
+                ctx.stroke();
+            });
+        });
+    } else {
+        // If baseImage is not complete, still render other elements if any
+        images.forEach((it, idx) => {
+            ctx.drawImage(it.img, it.x, it.y, it.width, it.height);
+            if (idx === selectedImageIndex) {
+                ctx.strokeStyle = 'blue';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(it.x, it.y, it.width, it.height);
+                drawHandles(it);
+            }
+        });
+        textItems.forEach((txt, idx) => {
+            ctx.font = txt.font; ctx.fillStyle = txt.color;
+            ctx.fillText(txt.text, txt.x, txt.y);
+            if (idx === selectedTextIndex) {
+                const width = ctx.measureText(txt.text).width;
+                const height = parseInt(txt.font);
+                ctx.strokeStyle = 'blue';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(txt.x, txt.y - height, width, height);
+            }
+        });
+        drawingPaths.forEach(path => {
+            ctx.strokeStyle = path.color;
+            ctx.lineWidth = path.size;
+            ctx.lineCap = "round";
+            ctx.beginPath();
+            path.points.forEach((pt, i) => i === 0 ? ctx.moveTo(pt.x, pt.y) : ctx.lineTo(pt.x, pt.y));
+            ctx.stroke();
+        });
+    }
+}
+
+
+function drawHandles(it) {
+    const x = it.x, y = it.y, w = it.width, h = it.height;
+    ctx.fillStyle = 'white'; ctx.strokeStyle = 'blue'; ctx.lineWidth = 1;
+    [
+        [x, y], [x + w, y],
+        [x + w, y + h], [x, y + h]
+    ].forEach(([hx, hy]) => {
+        ctx.beginPath();
+        ctx.rect(hx - cornerSize / 2, hy - cornerSize / 2, cornerSize, cornerSize);
+        ctx.fill();
+        ctx.stroke();
+    });
+}
+
+function updateSelectedText() {
+    if (selectedTextIndex === null) return;
+    const txt = textItems[selectedTextIndex];
+    txt.text = textInput.value;
+    txt.color = textColorPicker.value;
+    txt.font = `${parseInt(fontSizeInput.value) || 24}px ${fontSelect.value}`;
+    renderCanvas();
+}
+
+textInput.addEventListener("input", updateSelectedText);
+textColorPicker.addEventListener("input", updateSelectedText);
+fontSelect.addEventListener("change", updateSelectedText);
+fontSizeInput.addEventListener("input", updateSelectedText);
+
+function getMousePos(e) {
+    const r = canvas.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+}
+
+function exitDrawingMode() {
+    drawModeToggle.checked = false;
+    isDrawing = false;
+}
+
+canvas.addEventListener("mousedown", e => {
+    const pos = getMousePos(e);
+    isDrawing = drawModeToggle.checked;
+    if (isDrawing) {
+        lastX = pos.x; lastY = pos.y;
+        drawingPaths.push({ color: penColorPicker.value, size: penSize, points: [{ x: lastX, y: lastY }] });
+        return;
+    }
+    if (selectedTextIndex !== null) {
+        const txt = textItems[selectedTextIndex];
+        textInput.value = txt.text;
+        const fontParts = txt.font.match(/^(\d+)px\s(.+)$/);
+        if (fontParts) {
+            fontSizeInput.value = fontParts[1];
+            fontSelect.value = fontParts[2];
+        } else {
+            fontSizeInput.value = 24;
+            fontSelect.value = "Arial";
+        }
+        textColorPicker.value = txt.color;
+    } else {
+        textInput.value = "";
+    }
+
+    selectedImageIndex = null;
+    selectedTextIndex = null;
+    resizingCorner = null;
+    draggingItem = false;
+    draggingText = false;
+    offsetX = 0;
+    offsetY = 0;
+
+    for (let i = images.length - 1; i >= 0; i--) {
+        const it = images[i];
+        const corners = [
+            { name: 'tl', x: it.x, y: it.y },
+            { name: 'tr', x: it.x + it.width, y: it.y },
+            { name: 'br', x: it.x + it.width, y: it.y + it.height },
+            { name: 'bl', x: it.x, y: it.y + it.height }
+        ];
+        for (const c of corners) {
+            if (pos.x >= c.x - cornerSize && pos.x <= c.x + cornerSize &&
+                pos.y >= c.y - cornerSize && pos.y <= c.y + cornerSize) {
+                selectedImageIndex = i;
+                resizingCorner = c.name;
+                renderCanvas();
+                return;
+            }
+        }
+        if (pos.x >= it.x && pos.x <= it.x + it.width &&
+            pos.y >= it.y && pos.y <= it.y + it.height) {
+            selectedImageIndex = i;
+            draggingItem = true;
+            offsetX = pos.x - it.x;
+            offsetY = pos.y - it.y;
+            renderCanvas();
+            return;
+        }
+    }
+
+    for (let i = textItems.length - 1; i >= 0; i--) {
+        const txt = textItems[i];
+        ctx.font = txt.font;
+        const width = ctx.measureText(txt.text).width;
+        const height = parseInt(txt.font);
+        if (pos.x >= txt.x && pos.x <= txt.x + width &&
+            pos.y >= txt.y - height && pos.y <= txt.y) {
+            selectedTextIndex = i;
+            draggingText = true;
+            offsetX = pos.x - txt.x;
+            offsetY = pos.y - txt.y;
+            renderCanvas();
+            return;
+        }
+    }
+    renderCanvas();
+});
+
+canvas.addEventListener("mousemove", e => {
+    const pos = getMousePos(e);
+    if (isDrawing) {
+        const path = drawingPaths[drawingPaths.length - 1];
+        path.points.push({ x: pos.x, y: pos.y });
+        ctx.strokeStyle = path.color;
+        ctx.lineWidth = path.size;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(lastX, lastY);
+        ctx.lineTo(pos.x, pos.y);
+        ctx.stroke();
+        lastX = pos.x; lastY = pos.y;
+        return;
+    }
+    if (resizingCorner !== null && selectedImageIndex !== null) {
+        const it = images[selectedImageIndex];
+        const prev = { x: it.x, y: it.y, w: it.width, h: it.height };
+        switch (resizingCorner) {
+            case 'tl':
+                it.width += it.x - pos.x;
+                it.height += it.y - pos.y;
+                it.x = pos.x;
+                it.y = pos.y;
+                break;
+            case 'tr':
+                it.width = pos.x - it.x;
+                it.height += it.y - pos.y;
+                it.y = pos.y;
+                break;
+            case 'br':
+                it.width = pos.x - it.x;
+                it.height = pos.y - it.y;
+                break;
+            case 'bl':
+                it.width += it.x - pos.x;
+                it.height = pos.y - it.y;
+                it.x = pos.x;
+                break;
+        }
+        if (it.width < 20) { it.width = prev.w; it.x = prev.x; }
+        if (it.height < 20) { it.height = prev.h; it.y = prev.y; }
+        renderCanvas();
+    } else if (draggingItem && selectedImageIndex !== null) {
+        const it = images[selectedImageIndex];
+        it.x = pos.x - offsetX;
+        it.y = pos.y - offsetY;
+        renderCanvas();
+    } else if (draggingText && selectedTextIndex !== null) {
+        const txt = textItems[selectedTextIndex];
+        txt.x = pos.x - offsetX;
+        txt.y = pos.y - offsetY;
+        renderCanvas();
+    }
+});
+
+canvas.addEventListener("mouseup", () => {
+    isDrawing = false;
+    resizingCorner = null;
+    draggingItem = false;
+    draggingText = false;
+});
+
+function deleteSelected() {
+    if (selectedImageIndex !== null) {
+        images.splice(selectedImageIndex, 1);
+        selectedImageIndex = null;
+        renderCanvas();
+    } else if (selectedTextIndex !== null) {
+        textItems.splice(selectedTextIndex, 1);
+        selectedTextIndex = null;
+        renderCanvas();
+    }
+}
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+        deleteSelected();
+    }
+});
+
+async function applyTexture() {
+    const exportCanvas = document.createElement("canvas");
+    exportCanvas.width = canvas.width;
+    exportCanvas.height = canvas.height;
+    const exportCtx = exportCanvas.getContext("2d");
+
+    const modelColor = getModelColor();
+    if (baseImage.complete) {
+        // Apply tint to the base image before drawing it to the export canvas
+        await new Promise(resolve => {
+            applyColorToImage(baseImage, modelColor, (tintedBaseImage) => {
+                if (tintedBaseImage) {
+                    exportCtx.drawImage(tintedBaseImage, 0, 0, exportCanvas.width, exportCanvas.height);
+                } else {
+                    exportCtx.drawImage(baseImage, 0, 0, exportCanvas.width, exportCanvas.height);
+                }
+                resolve();
+            });
+        });
+    }
+
+    exportCtx.save();
+    // Invert Y-axis for consistent drawing with canvas
+    exportCtx.translate(0, exportCanvas.height);
+    exportCtx.scale(1, -1);
+    
+    for (const item of images) {
+        exportCtx.drawImage(item.img, item.x, item.y, item.width, item.height);
+    }
+    for (const txt of textItems) {
+        exportCtx.font = txt.font;
+        exportCtx.fillStyle = txt.color;
+        exportCtx.fillText(txt.text, txt.x, txt.y);
+    }
+    for (const path of drawingPaths) {
+        exportCtx.strokeStyle = path.color;
+        exportCtx.lineWidth = path.size || 2;
+        exportCtx.lineCap = "round";
+        exportCtx.beginPath();
+        for (let i = 1; i < path.points.length; i++) {
+            exportCtx.moveTo(path.points[i - 1].x, path.points[i - 1].y);
+            exportCtx.lineTo(path.points[i].x, path.points[i].y);
+        }
+        exportCtx.stroke();
+    }
+    exportCtx.restore();
+
+    const dataURL = exportCanvas.toDataURL("image/png");
+    const material = viewer.model.materials?.[0];
+    if (!material) {
+        alert("Model not loaded or doesn't support texture editing.");
+        return;
+    }
+    const newTexture = await viewer.createTexture(dataURL);
+    const baseColorMap = material.pbrMetallicRoughness.baseColorTexture;
+    if (baseColorMap) {
+        baseColorMap.setTexture(newTexture);
+    } else {
+        material.pbrMetallicRoughness.setBaseColorTexture(newTexture);
+    }
+    closeEditor();
+}
+window.applyTexture = applyTexture;
+
+
+document.querySelectorAll('input[name="color"]').forEach((input) => {
+    input.addEventListener("change", (event) => {
+        const hex = event.target.value;
+        changeModelColor(hex);
+        exitDrawingMode();
+    });
+});
+
+function changeModelColor(hex) {
+    const model = viewer.model;
+    if (model) {
+        const material = model.materials?.[0];
+        if (material) {
+            const [r, g, b] = hex.match(/[A-Fa-f0-9]{2}/g).map(h => parseInt(h, 16) / 255);
+            material.pbrMetallicRoughness.setBaseColorFactor([r, g, b, 1]);
+            // Re-render the canvas with the new base color applied to the texture
+            renderCanvas(); 
+        }
+    }
+}
+
+// Order and Design Logic
+function openConfirmOrder() {
+    if (!window.user) {
+        alert("Please log in to place an order.");
+        return;
+    }
+    window.selectedShirts = [];
+    window.editingIndex = null;
+    window.updateSummary();
+    document.getElementById('shirtQuantity').value = 1;
+    document.getElementById('actionButton').textContent = 'Add to Cart';
+    document.getElementById('cancelEditBtn').style.display = 'none';
+
+    const modelSelect = document.getElementById('modelSelect');
+    const selectedOption = modelSelect.options[modelSelect.selectedIndex];
+    const shirtName = selectedOption.text;
+    const shirtPrice = selectedOption.getAttribute('price');
+
+    document.getElementById('shirtName').textContent = shirtName;
+    document.getElementById('shirtPrice').textContent = shirtPrice;
+
+    window.currentShirt = {
+        name: shirtName,
+        price: Number(shirtPrice),
+    };
+
+    document.getElementById('confirmOrderContainer').classList.remove('hidden');
+}
+window.openConfirmOrder = openConfirmOrder;
+
+function closeConfirmOrder() {
+    document.getElementById('confirmOrderContainer').classList.add('hidden');
+    window.cancelEdit();
+}
+window.closeConfirmOrder = closeConfirmOrder;
+
+function addOrUpdateShirt() {
+    const size = document.getElementById('shirtSize').value;
+    const quantity = parseInt(document.getElementById('shirtQuantity').value);
+    if (quantity < 1) {
+        alert("Please enter a valid quantity.");
+        return;
+    }
+    const newItem = {
+        type: window.currentShirt.name,
+        size,
+        quantity,
+        price: window.currentShirt.price
+    };
+
+    if (window.editingIndex !== null) {
+        window.selectedShirts[window.editingIndex] = newItem;
+        window.cancelEdit();
+    } else {
+        const duplicateIndex = window.selectedShirts.findIndex(
+            item => item.type === newItem.type && item.size === newItem.size
+        );
+        if (duplicateIndex !== -1) {
+            alert("This shirt and size combination already exists. Please edit it instead.");
+            return;
+        }
+        window.selectedShirts.push(newItem);
+    }
+    window.updateSummary();
+    document.getElementById('shirtQuantity').value = 1;
+}
+window.addOrUpdateShirt = addOrUpdateShirt;
+
+function editItem(index) {
+    const item = window.selectedShirts[index];
+    window.editingIndex = index;
+    document.getElementById('shirtSize').value = item.size;
+    document.getElementById('shirtQuantity').value = item.quantity;
+    document.getElementById('actionButton').textContent = 'Update';
+    document.getElementById('cancelEditBtn').style.display = 'inline-block';
+}
+window.editItem = editItem;
+
+function cancelEdit() {
+    window.editingIndex = null;
+    document.getElementById('shirtQuantity').value = 1;
+    document.getElementById('actionButton').textContent = 'Add to Cart';
+    document.getElementById('cancelEditBtn').style.display = 'none';
+}
+window.cancelEdit = cancelEdit;
+
+function removeItemFromCart(index) {
+    window.selectedShirts.splice(index, 1);
+    window.updateSummary();
+    window.cancelEdit();
+}
+window.removeItemFromCart = removeItemFromCart;
+
+function updateSummary() {
+    const summaryList = document.getElementById('summaryList');
+    summaryList.innerHTML = '';
+    let totalQty = 0;
+    let totalPrice = 0;
+
+    window.selectedShirts.forEach(({ type, size, quantity, price }, index) => {
+        const li = document.createElement('li');
+        li.className = 'flex justify-between items-center';
+        const itemText = document.createElement('span');
+        itemText.textContent = `${type} - Size ${size} × ${quantity} = ₹${quantity * price}`;
+        const btnGroup = document.createElement('span');
+        const editBtn = document.createElement('button');
+        editBtn.textContent = 'Edit';
+        editBtn.className = 'text-blue-600 hover:underline ml-2';
+        editBtn.onclick = () => window.editItem(index);
+        const removeBtn = document.createElement('button');
+        removeBtn.textContent = 'Remove';
+        removeBtn.className = 'text-red-600 hover:underline ml-2';
+        removeBtn.onclick = () => window.removeItemFromCart(index);
+        btnGroup.appendChild(editBtn);
+        btnGroup.appendChild(removeBtn);
+        li.appendChild(itemText);
+        li.appendChild(btnGroup);
+        summaryList.appendChild(li);
+        totalQty += quantity;
+        totalPrice += quantity * price;
+    });
+
+    document.getElementById('totalQuantity').textContent = `Total Quantity: ${totalQty}`;
+    document.getElementById('totalPrice').textContent = totalPrice;
+}
+window.updateSummary = updateSummary;
+
+async function confirmFinalOrder() {
+    if (!window.user) {
+        alert("Please log in to place an order.");
+        return;
+    }
+    if (!savedDesignId) {
+        alert("Please save your design first.");
+        return;
+    }
+    const orderResult = await window.confirmFinalOrder(window.selectedShirts, savedDesignId);
+    if (orderResult) {
+        // Optionally, clear the cart after a successful order
+        window.selectedShirts = [];
+        window.updateSummary();
+    }
+}
+window.confirmFinalOrder = confirmFinalOrder;
+
+
+function getModelColor() {
+    const model = viewer.model;
+    if (model) {
+        const material = model.materials?.[0];
+        if (material && material.pbrMetallicRoughness.baseColorFactor) {
+            const factor = material.pbrMetallicRoughness.baseColorFactor;
+            // Check if the color factor is set, otherwise default to white
+            if (factor.length === 4 && typeof factor[0] === 'number') {
+                const r = Math.round(factor[0] * 255).toString(16).padStart(2, '0');
+                const g = Math.round(factor[1] * 255).toString(16).padStart(2, '0');
+                const b = Math.round(factor[2] * 255).toString(16).padStart(2, '0');
+                return `#${r}${g}${b}`;
+            }
+        }
+    }
+    // Default to white if no color factor is found or it's invalid
+    return '#ffffff';
+}
+
+async function getAppliedTextureURL() {
+    const exportCanvas = document.createElement("canvas");
+    exportCanvas.width = canvas.width;
+    exportCanvas.height = canvas.height;
+    const exportCtx = exportCanvas.getContext("2d");
+    
+    const modelColor = getModelColor();
+    if (baseImage.complete) {
+        await new Promise(resolve => {
+            applyColorToImage(baseImage, modelColor, (tintedBaseImage) => {
+                if (tintedBaseImage) {
+                    exportCtx.drawImage(tintedBaseImage, 0, 0, exportCanvas.width, exportCanvas.height);
+                } else {
+                    exportCtx.drawImage(baseImage, 0, 0, exportCanvas.width, exportCanvas.height);
+                }
+                resolve();
+            });
+        });
+    }
+
+    exportCtx.save();
+    exportCtx.translate(0, exportCanvas.height);
+    exportCtx.scale(1, -1);
+    for (const item of images) {
+        exportCtx.drawImage(item.img, item.x, item.y, item.width, item.height);
+    }
+    for (const txt of textItems) {
+        exportCtx.font = txt.font;
+        exportCtx.fillStyle = txt.color;
+        exportCtx.fillText(txt.text, txt.x, txt.y);
+    }
+    for (const path of drawingPaths) {
+        exportCtx.strokeStyle = path.color;
+        exportCtx.lineWidth = path.size || 2;
+        exportCtx.lineCap = "round";
+        exportCtx.beginPath();
+        for (let i = 1; i < path.points.length; i++) {
+            exportCtx.moveTo(path.points[i - 1].x, path.points[i - 1].y);
+            exportCtx.lineTo(path.points[i].x, path.points[i].y);
+        }
+        exportCtx.stroke();
+    }
+    exportCtx.restore();
+    return exportCanvas.toDataURL("image/png");
+}
+
+async function getDesignData() {
+    return {
+        shirtModel: viewer.src,
+        clothColor: getModelColor(),
+        images: images.map(img => ({ x: img.x, y: img.y, width: img.width, height: img.height, url: img.img.src })),
+        textItems: textItems,
+        drawingPaths: drawingPaths,
+        textureURL: await getAppliedTextureURL(),
+    };
+}
+
+saveDesignBtn.addEventListener('click', async () => {
+    if (!window.user) {
+        alert("Please log in to save a design.");
+        return;
+    }
+    designNameInput.value = '';
+    saveDesignError.classList.add('hidden');
+    saveDesignModal.classList.remove('hidden');
+});
+
+cancelSaveBtn.addEventListener('click', () => {
+    saveDesignModal.classList.add('hidden');
+});
+
+confirmSaveBtn.addEventListener('click', async () => {
+    const designName = designNameInput.value.trim();
+    if (!designName) {
+        saveDesignError.textContent = "Please enter a design name.";
+        saveDesignError.classList.remove('hidden');
+        return;
+    }
+    const designData = await getDesignData();
+    const result = await window.saveDesign(designName, designData);
+    if (result) {
+        savedDesignId = result;
+        saveDesignModal.classList.add('hidden');
+    }
+});
+
+window.addOrUpdateShirt = addOrUpdateShirt;
+window.editItem = editItem;
+window.cancelEdit = cancelEdit;
+window.removeItemFromCart = removeItemFromCart;
+window.updateSummary = updateSummary;
