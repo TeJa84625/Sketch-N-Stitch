@@ -12,24 +12,41 @@ const modelSelect = document.getElementById("modelSelect");
 const drawModeToggle = document.getElementById("drawModeToggle");
 const penColorPicker = document.getElementById("penColorPicker");
 const penSizeSlider = document.getElementById("penSizeSlider");
+const rotationInput = document.getElementById("rotationInput");
 
-const images = [], textItems = [], drawingPaths = [];
+const images = [],
+    textItems = [],
+    drawingPaths = [];
 let baseImage = new Image();
 let selectedImageIndex = null;
 let selectedTextIndex = null;
-let draggingItem = false, draggingText = false, resizingCorner = null;
-let offsetX = 0, offsetY = 0;
-let isDrawing = false, lastX = 0, lastY = 0;
+let draggingItem = false,
+    draggingText = false,
+    resizingCorner = null;
+let offsetX = 0,
+    offsetY = 0;
+let isDrawing = false,
+    lastX = 0,
+    lastY = 0;
 let penSize = parseInt(penSizeSlider.value);
 let selectedColorFactor = null;
 
 const cornerSize = 10;
 
+function deselectAll() {
+    selectedImageIndex = null;
+    selectedTextIndex = null;
+    isDrawing = false;
+    drawModeToggle.checked = false;
+    if (rotationInput) {
+        rotationInput.style.display = 'none';
+    }
+}
+
 document.getElementById("resetButton").addEventListener("click", resetToBaseTexture);
 
 function clearDrawing() {
     drawingPaths.length = 0;
-
     renderCanvas();
 }
 
@@ -50,16 +67,16 @@ penSizeSlider.addEventListener("input", () => {
 });
 
 modelSelect.addEventListener("change", () => {
-    isDrawing = false;
+    deselectAll();
     const opt = modelSelect.selectedOptions[0];
     viewer.src = opt.value;
     baseImage.src = opt.getAttribute("data-texture");
 });
 
 function openEditor() {
+    deselectAll();
     const opt = modelSelect.selectedOptions[0];
     imageInput.value = "";
-    isDrawing = false; 
     baseImage.onload = () => {
         modal.classList.add("active");
         renderCanvas();
@@ -72,17 +89,23 @@ function closeEditor() {
     modal.classList.remove("active");
     selectedImageIndex = null;
     selectedTextIndex = null;
+    if (rotationInput) {
+        rotationInput.style.display = 'none';
+    }
 }
 
 imageInput.addEventListener("change", () => {
-    isDrawing = false;
+    deselectAll();
     for (const file of imageInput.files) {
         const img = new Image();
         img.onload = () => {
             images.push({
                 img,
-                x: 50, y: 50,
-                width: img.width, height: img.height
+                x: 50,
+                y: 50,
+                width: img.width,
+                height: img.height,
+                rotation: 0
             });
             renderCanvas();
         };
@@ -91,14 +114,17 @@ imageInput.addEventListener("change", () => {
 });
 
 function addText() {
-    isDrawing = false;
+    deselectAll();
     const txt = textInput.value.trim();
     if (!txt) return;
     const fz = parseInt(fontSizeInput.value) || 24;
     textItems.push({
-        text: txt, x: 50, y: 50,
+        text: txt,
+        x: 250,
+        y: 250,
         font: `${fz}px ${fontSelect.value}`,
-        color: textColorPicker.value
+        color: textColorPicker.value,
+        rotation: 0
     });
     textInput.value = "";
     renderCanvas();
@@ -106,7 +132,7 @@ function addText() {
 
 function renderCanvas() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    if (baseImage.complete) {
+    if (baseImage.complete && baseImage.width > 0 && baseImage.height > 0) {
         const tempCanvas = document.createElement("canvas");
         tempCanvas.width = baseImage.width;
         tempCanvas.height = baseImage.height;
@@ -119,7 +145,7 @@ function renderCanvas() {
             tempCtx.fillStyle = `rgba(${colorFactor[0] * 255}, ${colorFactor[1] * 255}, ${colorFactor[2] * 255}, ${colorFactor[3]})`;
             tempCtx.globalCompositeOperation = 'multiply';
             tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
-            tempCtx.globalCompositeOperation = 'source-over'; // Reset to default
+            tempCtx.globalCompositeOperation = 'source-over';
         }
 
         ctx.save();
@@ -130,25 +156,41 @@ function renderCanvas() {
     }
 
     images.forEach((it, idx) => {
-        ctx.drawImage(it.img, it.x, it.y, it.width, it.height);
+        ctx.save();
+        ctx.translate(it.x, it.y);
+        ctx.rotate(it.rotation);
+        ctx.drawImage(it.img, -it.width / 2, -it.height / 2, it.width, it.height);
+
         if (idx === selectedImageIndex) {
             ctx.strokeStyle = 'blue';
             ctx.lineWidth = 2;
-            ctx.strokeRect(it.x, it.y, it.width, it.height);
-            drawHandles(it);
+            ctx.strokeRect(-it.width / 2, -it.height / 2, it.width, it.height);
+            drawHandles({
+                x: -it.width / 2,
+                y: -it.height / 2,
+                width: it.width,
+                height: it.height
+            });
         }
+        ctx.restore();
     });
 
     textItems.forEach((txt, idx) => {
-        ctx.font = txt.font; ctx.fillStyle = txt.color;
-        ctx.fillText(txt.text, txt.x, txt.y);
+        ctx.save();
+        ctx.font = txt.font;
+        const width = ctx.measureText(txt.text).width;
+        const height = parseInt(txt.font);
+        ctx.translate(txt.x, txt.y);
+        ctx.rotate(txt.rotation);
+        ctx.fillStyle = txt.color;
+        ctx.fillText(txt.text, -width / 2, height / 2);
+
         if (idx === selectedTextIndex) {
-            const width = ctx.measureText(txt.text).width;
-            const height = parseInt(txt.font);
             ctx.strokeStyle = 'blue';
             ctx.lineWidth = 1;
-            ctx.strokeRect(txt.x, txt.y - height, width, height);
+            ctx.strokeRect(-width / 2, -height / 2, width, height);
         }
+        ctx.restore();
     });
 
     drawingPaths.forEach(path => {
@@ -162,11 +204,18 @@ function renderCanvas() {
 }
 
 function drawHandles(it) {
-    const x = it.x, y = it.y, w = it.width, h = it.height;
-    ctx.fillStyle = 'white'; ctx.strokeStyle = 'blue'; ctx.lineWidth = 1;
+    const x = it.x,
+        y = it.y,
+        w = it.width,
+        h = it.height;
+    ctx.fillStyle = 'white';
+    ctx.strokeStyle = 'blue';
+    ctx.lineWidth = 1;
     [
-        [x, y], [x + w, y],
-        [x + w, y + h], [x, y + h]
+        [x, y],
+        [x + w, y],
+        [x + w, y + h],
+        [x, y + h]
     ].forEach(([hx, hy]) => {
         ctx.beginPath();
         ctx.rect(hx - cornerSize / 2, hy - cornerSize / 2, cornerSize, cornerSize);
@@ -177,12 +226,10 @@ function drawHandles(it) {
 
 function updateSelectedText() {
     if (selectedTextIndex === null) return;
-
     const txt = textItems[selectedTextIndex];
     txt.text = textInput.value;
     txt.color = textColorPicker.value;
     txt.font = `${parseInt(fontSizeInput.value) || 24}px ${fontSelect.value}`;
-
     renderCanvas();
 }
 
@@ -190,100 +237,150 @@ textInput.addEventListener("input", updateSelectedText);
 textColorPicker.addEventListener("input", updateSelectedText);
 fontSelect.addEventListener("change", updateSelectedText);
 fontSizeInput.addEventListener("input", updateSelectedText);
+drawModeToggle.addEventListener("change", () => {
+    isDrawing = drawModeToggle.checked;
+    selectedImageIndex = null;
+    selectedTextIndex = null;
+    renderCanvas();
+});
+
+if (rotationInput) {
+    rotationInput.addEventListener("input", () => {
+        const degrees = parseFloat(rotationInput.value) || 0;
+        const radians = degrees * Math.PI / 180;
+        if (selectedImageIndex !== null) {
+            images[selectedImageIndex].rotation = radians;
+        } else if (selectedTextIndex !== null) {
+            textItems[selectedTextIndex].rotation = radians;
+        }
+        renderCanvas();
+    });
+}
 
 function getMousePos(e) {
     const r = canvas.getBoundingClientRect();
-    return { x: e.clientX - r.left, y: e.clientY - r.top };
+    return {
+        x: e.clientX - r.left,
+        y: e.clientY - r.top
+    };
 }
 
 canvas.addEventListener("mousedown", e => {
     const pos = getMousePos(e);
     isDrawing = drawModeToggle.checked;
     if (isDrawing) {
-        lastX = pos.x; lastY = pos.y;
-        drawingPaths.push({ color: penColorPicker.value, size: penSize, points: [{ x: lastX, y: lastY }] });
+        lastX = pos.x;
+        lastY = pos.y;
+        drawingPaths.push({
+            color: penColorPicker.value,
+            size: penSize,
+            points: [{
+                x: lastX,
+                y: lastY
+            }]
+        });
         return;
     }
-    if (selectedTextIndex !== null) {
-        const txt = textItems[selectedTextIndex];
-        textInput.value = txt.text;
-
-        const fontParts = txt.font.match(/^(\d+)px\s(.+)$/);
-        if (fontParts) {
-            fontSizeInput.value = fontParts[1];
-            fontSelect.value = fontParts[2];
-        } else {
-            fontSizeInput.value = 24;
-            fontSelect.value = "Arial";
-        }
-
-        textColorPicker.value = txt.color;
-    } else {
-        textInput.value = "";
-    }
-
 
     selectedImageIndex = null;
     selectedTextIndex = null;
     resizingCorner = null;
     draggingItem = false;
     draggingText = false;
-    offsetX = 0;
-    offsetY = 0;
+    if (rotationInput) {
+        rotationInput.style.display = 'none';
+    }
 
+    // Check for images
     for (let i = images.length - 1; i >= 0; i--) {
         const it = images[i];
-        const corners = [
-            { name: 'tl', x: it.x, y: it.y },
-            { name: 'tr', x: it.x + it.width, y: it.y },
-            { name: 'br', x: it.x + it.width, y: it.y + it.height },
-            { name: 'bl', x: it.x, y: it.y + it.height }
-        ];
-        for (const c of corners) {
-            if (pos.x >= c.x - cornerSize && pos.x <= c.x + cornerSize &&
-                pos.y >= c.y - cornerSize && pos.y <= c.y + cornerSize) {
-                selectedImageIndex = i;
-                resizingCorner = c.name;
-                renderCanvas();
-                return;
+        const center = {
+            x: it.x,
+            y: it.y
+        };
+        const rotatedPos = rotatePoint(pos, center, -it.rotation);
+
+        if (rotatedPos.x >= it.x - it.width / 2 && rotatedPos.x <= it.x + it.width / 2 &&
+            rotatedPos.y >= it.y - it.height / 2 && rotatedPos.y <= it.y + it.height / 2) {
+
+            // Check for resize handles first
+            const corners = [{
+                x: it.x - it.width / 2,
+                y: it.y - it.height / 2
+            }, {
+                x: it.x + it.width / 2,
+                y: it.y - it.height / 2
+            }, {
+                x: it.x + it.width / 2,
+                y: it.y + it.height / 2
+            }, {
+                x: it.x - it.width / 2,
+                y: it.y + it.height / 2
+            }];
+            const rotatedCorners = corners.map(c => rotatePoint(c, center, it.rotation));
+            for (let j = 0; j < rotatedCorners.length; j++) {
+                if (Math.hypot(pos.x - rotatedCorners[j].x, pos.y - rotatedCorners[j].y) < cornerSize) {
+                    selectedImageIndex = i;
+                    resizingCorner = ['tl', 'tr', 'br', 'bl'][j];
+                    if (rotationInput) {
+                        rotationInput.style.display = 'block';
+                        rotationInput.value = (it.rotation * 180 / Math.PI).toFixed(1);
+                    }
+                    renderCanvas();
+                    return;
+                }
             }
-        }
-        if (pos.x >= it.x && pos.x <= it.x + it.width &&
-            pos.y >= it.y && pos.y <= it.y + it.height) {
+            
+            // If not a resize handle, it's a drag
             selectedImageIndex = i;
             draggingItem = true;
-            offsetX = pos.x - it.x;
-            offsetY = pos.y - it.y;
+            offsetX = rotatedPos.x - it.x;
+            offsetY = rotatedPos.y - it.y;
+            if (rotationInput) {
+                rotationInput.style.display = 'block';
+                rotationInput.value = (it.rotation * 180 / Math.PI).toFixed(1);
+            }
             renderCanvas();
             return;
         }
     }
 
+    // Check for text items
     for (let i = textItems.length - 1; i >= 0; i--) {
         const txt = textItems[i];
         ctx.font = txt.font;
         const width = ctx.measureText(txt.text).width;
         const height = parseInt(txt.font);
-        if (pos.x >= txt.x && pos.x <= txt.x + width &&
-            pos.y >= txt.y - height && pos.y <= txt.y) {
+        const center = {
+            x: txt.x,
+            y: txt.y
+        };
+        const rotatedPos = rotatePoint(pos, center, -txt.rotation);
+        if (rotatedPos.x >= txt.x - width / 2 && rotatedPos.x <= txt.x + width / 2 &&
+            rotatedPos.y >= txt.y - height / 2 && rotatedPos.y <= txt.y + height / 2) {
             selectedTextIndex = i;
             draggingText = true;
-            offsetX = pos.x - txt.x;
-            offsetY = pos.y - txt.y;
+            offsetX = rotatedPos.x - txt.x;
+            offsetY = rotatedPos.y - txt.y;
+            if (rotationInput) {
+                rotationInput.style.display = 'block';
+                rotationInput.value = (txt.rotation * 180 / Math.PI).toFixed(1);
+            }
             renderCanvas();
             return;
         }
     }
-
     renderCanvas();
 });
 
 canvas.addEventListener("mousemove", e => {
     const pos = getMousePos(e);
-
     if (isDrawing) {
         const path = drawingPaths[drawingPaths.length - 1];
-        path.points.push({ x: pos.x, y: pos.y });
+        path.points.push({
+            x: pos.x,
+            y: pos.y
+        });
         ctx.strokeStyle = path.color;
         ctx.lineWidth = path.size;
         ctx.lineCap = "round";
@@ -291,49 +388,66 @@ canvas.addEventListener("mousemove", e => {
         ctx.moveTo(lastX, lastY);
         ctx.lineTo(pos.x, pos.y);
         ctx.stroke();
-        lastX = pos.x; lastY = pos.y;
+        lastX = pos.x;
+        lastY = pos.y;
         return;
     }
-
     if (resizingCorner !== null && selectedImageIndex !== null) {
         const it = images[selectedImageIndex];
-        const prev = { x: it.x, y: it.y, w: it.width, h: it.height };
+        const center = {
+            x: it.x,
+            y: it.y
+        };
+        const rotatedPos = rotatePoint(pos, center, -it.rotation);
+        const prev = {
+            w: it.width,
+            h: it.height
+        };
 
         switch (resizingCorner) {
             case 'tl':
-                it.width += it.x - pos.x;
-                it.height += it.y - pos.y;
-                it.x = pos.x;
-                it.y = pos.y;
+                it.width = (it.x - rotatedPos.x) * 2;
+                it.height = (it.y - rotatedPos.y) * 2;
                 break;
             case 'tr':
-                it.width = pos.x - it.x;
-                it.height += it.y - pos.y;
-                it.y = pos.y;
+                it.width = (rotatedPos.x - it.x) * 2;
+                it.height = (it.y - rotatedPos.y) * 2;
                 break;
             case 'br':
-                it.width = pos.x - it.x;
-                it.height = pos.y - it.y;
+                it.width = (rotatedPos.x - it.x) * 2;
+                it.height = (rotatedPos.y - it.y) * 2;
                 break;
             case 'bl':
-                it.width += it.x - pos.x;
-                it.height = pos.y - it.y;
-                it.x = pos.x;
+                it.width = (it.x - rotatedPos.x) * 2;
+                it.height = (rotatedPos.y - it.y) * 2;
                 break;
         }
-        if (it.width < 20) { it.width = prev.w; it.x = prev.x; }
-        if (it.height < 20) { it.height = prev.h; it.y = prev.y; }
-
+        if (it.width < 20) {
+            it.width = prev.w;
+        }
+        if (it.height < 20) {
+            it.height = prev.h;
+        }
         renderCanvas();
     } else if (draggingItem && selectedImageIndex !== null) {
         const it = images[selectedImageIndex];
-        it.x = pos.x - offsetX;
-        it.y = pos.y - offsetY;
+        const center = { x: it.x, y: it.y };
+        const rotatedPos = rotatePoint(pos, center, -it.rotation);
+        
+        // This is the key fix. We use the rotated mouse position to update the item's coordinates.
+        it.x = rotatedPos.x - offsetX;
+        it.y = rotatedPos.y - offsetY;
+        
         renderCanvas();
     } else if (draggingText && selectedTextIndex !== null) {
         const txt = textItems[selectedTextIndex];
-        txt.x = pos.x - offsetX;
-        txt.y = pos.y - offsetY;
+        const center = { x: txt.x, y: txt.y };
+        const rotatedPos = rotatePoint(pos, center, -txt.rotation);
+        
+        // This is the key fix for text.
+        txt.x = rotatedPos.x - offsetX;
+        txt.y = rotatedPos.y - offsetY;
+        
         renderCanvas();
     }
 });
@@ -349,19 +463,32 @@ function deleteSelected() {
     if (selectedImageIndex !== null) {
         images.splice(selectedImageIndex, 1);
         selectedImageIndex = null;
-        renderCanvas();
     } else if (selectedTextIndex !== null) {
         textItems.splice(selectedTextIndex, 1);
         selectedTextIndex = null;
-        renderCanvas();
     }
+    if (rotationInput) {
+        rotationInput.style.display = 'none';
+    }
+    renderCanvas();
 }
 
 document.addEventListener('keydown', (e) => {
-    if (e.key === 'Delete' || e.key === 'Backspace') {
+    if (e.key === 'Delete' ) { //|| e.key === 'Backspace'
         deleteSelected();
     }
 });
+
+function rotatePoint(point, center, angle) {
+    const x = point.x - center.x;
+    const y = point.y - center.y;
+    const newX = x * Math.cos(angle) - y * Math.sin(angle);
+    const newY = x * Math.sin(angle) + y * Math.cos(angle);
+    return {
+        x: newX + center.x,
+        y: newY + center.y
+    };
+}
 
 async function applyTexture() {
     const exportCanvas = document.createElement("canvas");
@@ -382,7 +509,7 @@ async function applyTexture() {
             tempCtx.fillStyle = `rgba(${colorFactor[0] * 255}, ${colorFactor[1] * 255}, ${colorFactor[2] * 255}, ${colorFactor[3]})`;
             tempCtx.globalCompositeOperation = 'multiply';
             tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
-            tempCtx.globalCompositeOperation = 'source-over'; 
+            tempCtx.globalCompositeOperation = 'source-over';
         }
         exportCtx.drawImage(tempCanvas, 0, 0, exportCanvas.width, exportCanvas.height);
     }
@@ -392,13 +519,23 @@ async function applyTexture() {
     exportCtx.scale(1, -1);
 
     for (const item of images) {
-        exportCtx.drawImage(item.img, item.x, item.y, item.width, item.height);
+        exportCtx.save();
+        exportCtx.translate(item.x, item.y);
+        exportCtx.rotate(item.rotation);
+        exportCtx.drawImage(item.img, -item.width / 2, -item.height / 2, item.width, item.height);
+        exportCtx.restore();
     }
 
     for (const txt of textItems) {
+        exportCtx.save();
         exportCtx.font = txt.font;
+        const width = exportCtx.measureText(txt.text).width;
+        const height = parseInt(txt.font);
+        exportCtx.translate(txt.x, txt.y);
+        exportCtx.rotate(txt.rotation);
         exportCtx.fillStyle = txt.color;
-        exportCtx.fillText(txt.text, txt.x, txt.y);
+        exportCtx.fillText(txt.text, -width / 2, height / 2);
+        exportCtx.restore();
     }
 
     for (const path of drawingPaths) {
@@ -434,10 +571,10 @@ async function applyTexture() {
 }
 
 document.querySelectorAll('input[name="color"]').forEach((input) => {
-            input.addEventListener("change", (event) => {
-                const hex = event.target.value;
-                changeModelColor(hex);
-            });
+    input.addEventListener("change", (event) => {
+        const hex = event.target.value;
+        changeModelColor(hex);
+    });
 });
 
 function changeModelColor(hex) {
